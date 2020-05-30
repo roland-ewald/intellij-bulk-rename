@@ -17,5 +17,9 @@
 
     <actions>
         <!-- Add your actions here -->
+        <action id="es.ewald.intellij.bulkrename.ShowBulkRenameDialog" class="es.ewald.intellij.bulkrename.ShowBulkRenameDialog"
+                text="Bulk rename dialog" description="Opens the dialog for bulk renaming">
+            <add-to-group group-id="ToolsMenu" anchor="first"/>
+        </action>
     </actions>
 </idea-plugin>
