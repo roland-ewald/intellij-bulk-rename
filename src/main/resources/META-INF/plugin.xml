@@ -1,0 +1,21 @@
+<idea-plugin>
+    <id>es.ewald.idea-bulk-rename</id>
+    <name>IntelliJ bulk rename</name>
+    <vendor email="roland.ewald@acm.org" url="https://ewald.es">Roland Ewald</vendor>
+
+    <description><![CDATA[
+    Simple plugin to bulk-rename (refactor) files.<br>
+    ]]></description>
+
+    <!-- please see https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
+         on how to target different products -->
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Add your extensions here -->
+    </extensions>
+
+    <actions>
+        <!-- Add your actions here -->
+    </actions>
+</idea-plugin>
