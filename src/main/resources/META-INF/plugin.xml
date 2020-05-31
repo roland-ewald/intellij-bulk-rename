@@ -17,8 +17,8 @@
 
     <actions>
         <!-- Add your actions here -->
-        <action id="es.ewald.intellij.bulkrename.ShowBulkRenameDialog" class="es.ewald.intellij.bulkrename.ShowBulkRenameDialog"
-                text="Bulk rename dialog" description="Opens the dialog for bulk renaming">
+        <action id="es.ewald.intellij.bulkrename.ShowBulkRenameDialogAction" class="es.ewald.intellij.bulkrename.ShowBulkRenameDialogAction"
+                text="Bulk Rename" description="Bulk rename types by providing a CSV file with the mapping">
             <add-to-group group-id="ToolsMenu" anchor="first"/>
         </action>
     </actions>
