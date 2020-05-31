@@ -8,13 +8,16 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
-import com.intellij.psi.PsiFileSystemItem;
-import com.intellij.psi.search.FilenameIndex;
-import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.refactoring.rename.RenameProcessor;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiManager;
+import com.intellij.refactoring.RefactoringFactory;
+import com.intellij.refactoring.RenameRefactoring;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.components.JBList;
 import com.opencsv.CSVReader;
+import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,10 +69,15 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
     super.doOKAction();
     for (RenameTask task : tasks.getItems()) {
       LOG.info("Renaming {} into {}", task.getFileName(), task.getNewType());
-      PsiFileSystemItem[] filesByName = FilenameIndex
-          .getFilesByName(project, task.getFileName(), GlobalSearchScope.allScope(project), true);
-      new RenameProcessor(project, filesByName[0], task.getNewType(), task.isSearchInComments(),
-          task.isSearchTextOccurrences());
+      VirtualFile oldFile = LocalFileSystem.getInstance().findFileByPath(task.getFileName());
+      if (oldFile != null) {
+        PsiFile psiFile = PsiManager.getInstance(project).findFile(oldFile);
+        if (psiFile != null) {
+          RenameRefactoring rename = RefactoringFactory.getInstance(project)
+              .createRename(psiFile, task.getNewType(), task.isSearchInComments(), task.isSearchTextOccurrences());
+          rename.run();
+        }
+      }
     }
   }
 
@@ -97,7 +105,7 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
   private void reloadTasks() throws IOException, CsvException {
     tasks.removeAll();
     if (csvFile != null) {
-      try (CSVReader reader = new CSVReader(new FileReader(csvFile))) {
+      try (CSVReader reader = new CSVReaderBuilder(new FileReader(csvFile)).withSkipLines(1).build()) {
         for (String[] line : reader.readAll()) {
           tasks.add(new RenameTask(line[0], line[1], false, false));
         }
