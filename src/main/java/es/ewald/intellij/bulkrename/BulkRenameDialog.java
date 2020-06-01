@@ -10,15 +10,17 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiManager;
-import com.intellij.refactoring.RefactoringFactory;
-import com.intellij.refactoring.RenameRefactoring;
+import com.intellij.psi.*;
+import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.refactoring.rename.RenameProcessor;
+import com.intellij.refactoring.rename.RenamePsiElementProcessor;
+import com.intellij.refactoring.rename.naming.AutomaticRenamerFactory;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.components.JBList;
 import com.opencsv.CSVReader;
 import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvException;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +32,7 @@ import javax.swing.text.BadLocationException;
 import java.awt.*;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class BulkRenameDialog extends DialogWrapper implements DocumentListener {
 
@@ -44,15 +47,17 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
   public BulkRenameDialog(Project project) {
     super(true);
     this.project = project;
-    init();
     setTitle("Bulk Rename");
+    init();
   }
 
   @Nullable
   @Override
   protected JComponent createCenterPanel() {
     TextFieldWithBrowseButton csvFileChooser = new TextFieldWithBrowseButton();
-    csvFileChooser.addBrowseFolderListener("Choose CSV", "Choose CSV", project,
+    csvFileChooser.addBrowseFolderListener("Choose CSV",
+        "Choose CSV",
+        project,
         FileChooserDescriptorFactory.createSingleFileDescriptor("csv"));
     csvFileChooser.getTextField().getDocument().addDocumentListener(this);
 
@@ -72,13 +77,58 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
       VirtualFile oldFile = LocalFileSystem.getInstance().findFileByPath(task.getFileName());
       if (oldFile != null) {
         PsiFile psiFile = PsiManager.getInstance(project).findFile(oldFile);
-        if (psiFile != null) {
-          RenameRefactoring rename = RefactoringFactory.getInstance(project)
-              .createRename(psiFile, task.getNewType(), task.isSearchInComments(), task.isSearchTextOccurrences());
-          rename.run();
+        if (psiFile instanceof PsiJavaFile) {
+          renameJavaFile(project, task, (PsiJavaFile) psiFile);
         }
       }
     }
+  }
+
+  static void renameJavaFile(Project project, RenameTask task, PsiJavaFile psiFile) {
+    @NotNull PsiClass[] classesInFile = psiFile.getClasses();
+    PsiClass classToRename = null;
+    if (classesInFile.length == 1) {
+      classToRename = classesInFile[0];
+    } else if (classesInFile.length > 1) {
+      classToRename = Arrays.stream(classesInFile)
+          .filter(clazz -> clazz.hasModifierProperty(PsiModifier.PUBLIC))
+          .findAny()
+          .orElse(null);
+    }
+    if (classToRename != null) {
+      performRename(project,
+          classToRename,
+          task.getNewType(),
+          task.isSearchInComments(),
+          task.isSearchTextOccurrences());
+    }
+  }
+
+  /**
+   * @see com.intellij.refactoring.rename.RenameDialog#performRename(String)
+   */
+  static void performRename(
+      Project project,
+      @NotNull PsiClass psiClass,
+      @NotNull String newName,
+      boolean searchComments,
+      boolean searchText) {
+    final RenamePsiElementProcessor elementProcessor = RenamePsiElementProcessor.forElement(psiClass);
+    elementProcessor.setToSearchInComments(psiClass, searchComments);
+    elementProcessor.setToSearchForTextOccurrences(psiClass, searchText);
+    final RenameProcessor processor = new RenameProcessor(project,
+        psiClass,
+        newName,
+        GlobalSearchScope.projectScope(project),
+        searchComments,
+        searchText);
+    for (AutomaticRenamerFactory factory : AutomaticRenamerFactory.EP_NAME.getExtensionList()) {
+      if (factory.isApplicable(psiClass) && factory.getOptionName() != null) {
+        processor.addRenamerFactory(factory);
+      }
+    }
+    processor.setPreviewUsages(false);
+    processor.run();
   }
 
   @Override
