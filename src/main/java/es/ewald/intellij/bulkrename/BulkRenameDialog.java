@@ -8,17 +8,10 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.*;
-import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.refactoring.rename.RenameProcessor;
-import com.intellij.refactoring.rename.RenamePsiElementProcessor;
-import com.intellij.refactoring.rename.naming.AutomaticRenamerFactory;
+import com.intellij.psi.PsiJavaFile;
 import com.intellij.ui.CollectionListModel;
+import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBList;
-import com.opencsv.CSVReader;
-import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvException;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -30,9 +23,8 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
 import java.awt.*;
-import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Optional;
 
 public class BulkRenameDialog extends DialogWrapper implements DocumentListener {
 
@@ -42,11 +34,16 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
 
   private final CollectionListModel<RenameTask> tasks = new CollectionListModel<>();
 
-  private String csvFile = null;
+  private final RefactoringUtils refactoringUtils;
 
   public BulkRenameDialog(Project project) {
+    this(project, new RefactoringUtils(project));
+  }
+
+  BulkRenameDialog(Project project, RefactoringUtils refactoringUtils) {
     super(true);
     this.project = project;
+    this.refactoringUtils = refactoringUtils;
     setTitle("Bulk Rename");
     init();
   }
@@ -62,6 +59,7 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
     csvFileChooser.getTextField().getDocument().addDocumentListener(this);
 
     JBList<RenameTask> renameTaskLists = new JBList<>(tasks);
+    renameTaskLists.setCellRenderer(new RenameTaskListCellRenderer());
 
     JPanel panel = new JPanel(new BorderLayout());
     panel.add(csvFileChooser, BorderLayout.NORTH);
@@ -73,62 +71,10 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
   protected void doOKAction() {
     super.doOKAction();
     for (RenameTask task : tasks.getItems()) {
-      LOG.info("Renaming {} into {}", task.getFileName(), task.getNewType());
-      VirtualFile oldFile = LocalFileSystem.getInstance().findFileByPath(task.getFileName());
-      if (oldFile != null) {
-        PsiFile psiFile = PsiManager.getInstance(project).findFile(oldFile);
-        if (psiFile instanceof PsiJavaFile) {
-          renameJavaFile(project, task, (PsiJavaFile) psiFile);
-        }
-      }
+      LOG.info("Renaming class in '{}' to '{}'", task.getFileName(), task.getNewType());
+      Optional<PsiJavaFile> javaFile = refactoringUtils.lookUpJavaFile(task.getFileName());
+      javaFile.ifPresent(file -> refactoringUtils.renameJavaFile(task, file));
     }
-  }
-
-  static void renameJavaFile(Project project, RenameTask task, PsiJavaFile psiFile) {
-    @NotNull PsiClass[] classesInFile = psiFile.getClasses();
-    PsiClass classToRename = null;
-    if (classesInFile.length == 1) {
-      classToRename = classesInFile[0];
-    } else if (classesInFile.length > 1) {
-      classToRename = Arrays.stream(classesInFile)
-          .filter(clazz -> clazz.hasModifierProperty(PsiModifier.PUBLIC))
-          .findAny()
-          .orElse(null);
-    }
-    if (classToRename != null) {
-      performRename(project,
-          classToRename,
-          task.getNewType(),
-          task.isSearchInComments(),
-          task.isSearchTextOccurrences());
-    }
-  }
-
-  /**
-   * @see com.intellij.refactoring.rename.RenameDialog#performRename(String)
-   */
-  static void performRename(
-      Project project,
-      @NotNull PsiClass psiClass,
-      @NotNull String newName,
-      boolean searchComments,
-      boolean searchText) {
-    final RenamePsiElementProcessor elementProcessor = RenamePsiElementProcessor.forElement(psiClass);
-    elementProcessor.setToSearchInComments(psiClass, searchComments);
-    elementProcessor.setToSearchForTextOccurrences(psiClass, searchText);
-    final RenameProcessor processor = new RenameProcessor(project,
-        psiClass,
-        newName,
-        GlobalSearchScope.projectScope(project),
-        searchComments,
-        searchText);
-    for (AutomaticRenamerFactory factory : AutomaticRenamerFactory.EP_NAME.getExtensionList()) {
-      if (factory.isApplicable(psiClass) && factory.getOptionName() != null) {
-        processor.addRenamerFactory(factory);
-      }
-    }
-    processor.setPreviewUsages(false);
-    processor.run();
   }
 
   @Override
@@ -138,28 +84,31 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
 
   @Override
   public void removeUpdate(DocumentEvent documentEvent) {
-    csvFile = null;
     tasks.removeAll();
   }
 
   @Override
   public void changedUpdate(DocumentEvent documentEvent) {
     try {
-      csvFile = documentEvent.getDocument().getText(0, documentEvent.getLength());
-      reloadTasks();
+      reloadTasks(documentEvent.getDocument().getText(0, documentEvent.getLength()));
     } catch (BadLocationException | IOException | CsvException e) {
       LOG.error("Could not load rename tasks.", e);
     }
   }
 
-  private void reloadTasks() throws IOException, CsvException {
+  private void reloadTasks(String csvFile) throws IOException, CsvException {
     tasks.removeAll();
     if (csvFile != null) {
-      try (CSVReader reader = new CSVReaderBuilder(new FileReader(csvFile)).withSkipLines(1).build()) {
-        for (String[] line : reader.readAll()) {
-          tasks.add(new RenameTask(line[0], line[1], false, false));
-        }
-      }
+      tasks.add(RenameTask.loadTasks(csvFile));
+    }
+  }
+
+  @SuppressWarnings("java:S110") // Too many parents in IntelliJ's type hierarchy can't be avoided here
+  private static final class RenameTaskListCellRenderer extends SimpleListCellRenderer<RenameTask> {
+    @Override
+    public void customize(
+        @NotNull JList<? extends RenameTask> list, RenameTask task, int index, boolean selected, boolean hasFocus) {
+      setText(task.getDescription());
     }
   }
 }

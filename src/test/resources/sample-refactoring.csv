@@ -1,0 +1,4 @@
+File Name, New Type Name,Search in Comments, Search Text Occurrences
+/absolute/path/to/project/src/main/java/some/package/Sample.java,Sample2,true,true
+/absolute/path/to/project/src/main/java/some/package/AnotherSample.java,AnotherSample2,false,true
+/absolute/path/to/project/src/main/java/some/package/YetAnotherSample.java,YetAnotherSample2,true,false
