@@ -1,10 +1,10 @@
 <idea-plugin>
-    <id>es.ewald.idea-bulk-rename</id>
-    <name>IntelliJ bulk rename</name>
+    <id>es.ewald.intellij-bulk-rename</id>
+    <name>Bulk Rename</name>
     <vendor email="roland.ewald@acm.org" url="https://ewald.es">Roland Ewald</vendor>
 
     <description><![CDATA[
-    Simple plugin to bulk-rename (refactor) files.<br>
+    Simple plugin to bulk-rename (refactor) Java types.<br>
     ]]></description>
 
     <!-- please see https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
@@ -19,8 +19,8 @@
     <actions>
         <!-- Add your actions here -->
         <action id="es.ewald.intellij.bulkrename.ShowBulkRenameDialogAction" class="es.ewald.intellij.bulkrename.ShowBulkRenameDialogAction"
-                text="Bulk Rename" description="Bulk rename types by providing a CSV file with the mapping">
-            <add-to-group group-id="ToolsMenu" anchor="first"/>
+                text="Bulk Rename" description="Bulk rename Java types by providing a CSV file with the mapping">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>
 </idea-plugin>

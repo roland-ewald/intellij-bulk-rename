@@ -12,6 +12,7 @@ import com.intellij.psi.PsiJavaFile;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBList;
+import com.intellij.ui.components.JBScrollPane;
 import com.opencsv.exceptions.CsvException;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -60,10 +61,10 @@ public class BulkRenameDialog extends DialogWrapper implements DocumentListener 
 
     JBList<RenameTask> renameTaskLists = new JBList<>(tasks);
     renameTaskLists.setCellRenderer(new RenameTaskListCellRenderer());
-
+  
     JPanel panel = new JPanel(new BorderLayout());
     panel.add(csvFileChooser, BorderLayout.NORTH);
-    panel.add(renameTaskLists, BorderLayout.CENTER);
+    panel.add(new JBScrollPane(renameTaskLists), BorderLayout.CENTER);
     return panel;
   }
 
